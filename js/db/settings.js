@@ -1,6 +1,6 @@
 import { getAll, putOne, requestPromise, runTransaction } from './db.js';
 
-export const DEFAULT_CATEGORIES = ['上装', '下装', '连衣裙', '外套', '鞋', '包', '配饰', '其他'];
+export const DEFAULT_CATEGORIES = ['上衣', '外套', '裤子', '裙子', '连衣裙', '套装', '鞋靴', '箱包', '配饰', '其他'];
 export const DEFAULT_COLORS = ['黑', '白', '灰', '米', '棕', '红', '粉', '橙', '黄', '绿', '蓝', '紫', '花色'];
 export const COLOR_HEX = {
   黑: '#2B2B2B', 白: '#FAF7F2', 灰: '#9A9A96', 米: '#D9C7A7', 棕: '#8B5E3C',
@@ -17,7 +17,7 @@ export async function getSettings() {
     categories: map.categories ?? DEFAULT_CATEGORIES,
     colors: map.colors ?? DEFAULT_COLORS,
     lastBackupAt: map.lastBackupAt ?? null,
-    schemaVersion: map.schemaVersion ?? 1,
+    schemaVersion: map.schemaVersion ?? 2,
   };
 }
 
@@ -38,8 +38,12 @@ export async function renameCategory(oldName, newName) {
   await runTransaction(['settings', 'items'], 'readwrite', async tx => {
     const items = await requestPromise(tx.objectStore('items').getAll());
     for (const item of items) {
-      if (item.category !== oldName) continue;
-      item.category = newName;
+      const categories = Array.isArray(item.categories)
+        ? item.categories
+        : (item.category ? [item.category] : []);
+      if (!categories.includes(oldName)) continue;
+      item.categories = [...new Set(categories.map(value => value === oldName ? newName : value))];
+      delete item.category;
       item.updatedAt = nowISO();
       tx.objectStore('items').put(item);
     }
@@ -54,8 +58,12 @@ export async function renameColor(oldName, newName) {
   await runTransaction(['settings', 'items'], 'readwrite', async tx => {
     const items = await requestPromise(tx.objectStore('items').getAll());
     for (const item of items) {
-      if (item.color !== oldName) continue;
-      item.color = newName;
+      const colors = Array.isArray(item.colors)
+        ? item.colors
+        : (item.color ? [item.color] : []);
+      if (!colors.includes(oldName)) continue;
+      item.colors = [...new Set(colors.map(value => value === oldName ? newName : value))];
+      delete item.color;
       item.updatedAt = nowISO();
       tx.objectStore('items').put(item);
     }

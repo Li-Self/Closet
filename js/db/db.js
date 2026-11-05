@@ -1,19 +1,61 @@
 const DB_NAME = 'wardrobe-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbPromise = null;
+
+function migrateItems(tx) {
+  const store = tx.objectStore('items');
+  if (store.indexNames.contains('category')) store.deleteIndex('category');
+  if (!store.indexNames.contains('sortOrder')) store.createIndex('sortOrder', 'sortOrder');
+  store.openCursor().onsuccess = event => {
+    const cursor = event.target.result;
+    if (!cursor) return;
+    const item = cursor.value;
+    const categories = Array.isArray(item.categories)
+      ? item.categories
+      : (item.category ? [item.category] : []);
+    const colors = Array.isArray(item.colors)
+      ? item.colors
+      : (item.color ? [item.color] : []);
+    const sortOrder = Number.isFinite(item.sortOrder)
+      ? item.sortOrder
+      : (Number.isFinite(item.code) ? item.code : 0);
+    const { category, color, ...rest } = item;
+    cursor.update({ ...rest, categories, colors, sortOrder });
+    cursor.continue();
+  };
+}
+
+function migrateOutfits(tx) {
+  const store = tx.objectStore('outfits');
+  if (!store.indexNames.contains('sortOrder')) store.createIndex('sortOrder', 'sortOrder');
+  store.openCursor().onsuccess = event => {
+    const cursor = event.target.result;
+    if (!cursor) return;
+    const outfit = cursor.value;
+    const sortOrder = Number.isFinite(outfit.sortOrder)
+      ? outfit.sortOrder
+      : (Number.isFinite(outfit.code) ? outfit.code : 0);
+    cursor.update({ ...outfit, sortOrder });
+    cursor.continue();
+  };
+}
 
 export function openDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = event => {
       const db = request.result;
+      const tx = request.transaction;
+      const oldVersion = event.oldVersion;
       if (!db.objectStoreNames.contains('items')) {
         const store = db.createObjectStore('items', { keyPath: 'id' });
-        store.createIndex('category', 'category');
         store.createIndex('favorite', 'favorite');
         store.createIndex('createdAt', 'createdAt');
         store.createIndex('updatedAt', 'updatedAt');
+        store.createIndex('sortOrder', 'sortOrder');
+      } else if (oldVersion < 2) {
+        migrateItems(tx);
       }
       if (!db.objectStoreNames.contains('photos')) {
         db.createObjectStore('photos', { keyPath: 'id' });
@@ -22,6 +64,9 @@ export function openDB() {
         const store = db.createObjectStore('outfits', { keyPath: 'id' });
         store.createIndex('favorite', 'favorite');
         store.createIndex('createdAt', 'createdAt');
+        store.createIndex('sortOrder', 'sortOrder');
+      } else if (oldVersion < 2) {
+        migrateOutfits(tx);
       }
       if (!db.objectStoreNames.contains('wearLogs')) {
         const store = db.createObjectStore('wearLogs', { keyPath: 'id' });

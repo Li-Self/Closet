@@ -8,10 +8,12 @@ import { showToast } from '../components/toast.js';
 let unsubscribe = null;
 
 export function renderSettings() {
+  document.body.classList.add('settings-mode');
   unsubscribe?.();
   unsubscribe = subscribe(() => paint());
   paint();
   return () => {
+    document.body.classList.remove('settings-mode');
     unsubscribe?.();
     unsubscribe = null;
   };
@@ -21,7 +23,7 @@ function paint() {
   const app = document.getElementById('app');
   const state = getState();
   app.innerHTML = `
-    <div class="page">
+    <div class="page settings-page">
       <header class="page-header">
         <div>
           <div class="page-subtitle">My Closet</div>

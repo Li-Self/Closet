@@ -1,6 +1,7 @@
 import { getState, itemById, photoUrl, loadAll } from '../store.js';
 import { saveItem, deleteItem } from '../db/items.js';
 import { savePhoto, deletePhoto } from '../db/photos.js';
+import { COLOR_HEX } from '../db/settings.js';
 import { uuid } from '../utils/id.js';
 import { validateItem, hasErrors, SEASONS, OCCASIONS, SEASON_LABELS, OCCASION_LABELS } from '../utils/validation.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -17,50 +18,57 @@ export function renderItemEdit({ id = 'new' } = {}) {
     navigate('/wardrobe');
     return () => {};
   }
+  document.body.classList.add('detail-mode');
   const app = document.getElementById('app');
+  const existingCategories = existing
+    ? (existing.categories ?? (existing.category ? [existing.category] : []))
+    : [];
+  const existingColors = existing
+    ? (existing.colors ?? (existing.color ? [existing.color] : []))
+    : [];
+  const categories = [...new Set([...state.settings.categories, ...existingCategories])].filter(Boolean);
+  const colors = [...new Set([...state.settings.colors, ...existingColors])].filter(Boolean);
   const selected = {
+    categories: new Set(existing ? existingCategories : (categories.length ? [categories[0]] : [])),
+    colors: new Set(existingColors),
     seasons: new Set(existing?.seasons ?? []),
     occasions: new Set(existing?.occasions ?? []),
     favorite: Boolean(existing?.favorite),
   };
-  const categories = existing?.category && !state.settings.categories.includes(existing.category)
-    ? [...state.settings.categories, existing.category]
-    : state.settings.categories;
-  const colors = existing?.color && !state.settings.colors.includes(existing.color)
-    ? [...state.settings.colors, existing.color]
-    : state.settings.colors;
-  let selectedCategory = existing?.category ?? categories[0] ?? '';
-  let selectedColor = existing?.color ?? colors[0] ?? '';
   let photoChanged = false;
   let pendingPhoto = null;
 
   app.innerHTML = `
-    <div class="page">
-      <header class="page-header">
-        <button class="icon-button" id="back-button" aria-label="返回">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 5l-7 7 7 7"/></svg>
+    <div class="page edit-page">
+      <header class="page-header" style="padding-top:10px">
+        <button type="button" class="icon-button" id="back-button" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 5l-7 7 7 7"/></svg>
         </button>
-        <h1 class="page-title" style="font-size:22px;flex:1;text-align:center">${existing ? '编辑单品' : '录入单品'}</h1>
-        <span style="width:44px"></span>
+        <h1 class="page-title" style="font-size:17px;flex:1;text-align:center;line-height:44px">${existing ? '编辑单品' : '录入单品'}</h1>
+        <button type="button" class="head-link" id="header-save">保存</button>
       </header>
-      <form class="form-grid" id="item-form" novalidate>
-        <div id="photo-slot"></div>
+      <div class="photo-card" id="photo-slot"></div>
+      <form class="form-card" id="item-form" novalidate>
         <div class="field">
           <label class="field-label" for="item-name">名称 *</label>
           <input class="text-input" id="item-name" name="name" maxlength="60" value="${escapeHtml(existing?.name ?? '')}" required>
           <div class="field-error" id="error-name"></div>
         </div>
         <div class="field">
-          <div class="field-label">分类 *</div>
-          <div class="choice-row" id="category-choices">
-            ${categories.map(name => `<button type="button" class="choice-chip" data-category="${escapeHtml(name)}" aria-pressed="${name === selectedCategory}">${escapeHtml(name)}</button>`).join('')}
-          </div>
-          <div class="field-error" id="error-category"></div>
+          <label class="field-label" for="item-brand">品牌</label>
+          <input class="text-input" id="item-brand" maxlength="40" value="${escapeHtml(existing?.brand ?? '')}">
         </div>
         <div class="field">
-          <div class="field-label">颜色</div>
+          <div class="field-label">分类 · 可多选 *</div>
+          <div class="choice-row" id="category-choices">
+            ${categories.map(name => `<button type="button" class="choice-chip" data-category="${escapeHtml(name)}" aria-pressed="${selected.categories.has(name)}">${escapeHtml(name)}</button>`).join('')}
+          </div>
+          <div class="field-error" id="error-categories"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">颜色 · 可多选</div>
           <div class="choice-row" id="color-choices">
-            ${colors.map(name => `<button type="button" class="choice-chip" data-color="${escapeHtml(name)}" aria-pressed="${name === selectedColor}">${escapeHtml(name)}</button>`).join('')}
+            ${colors.map(name => `<button type="button" class="choice-chip" data-color="${escapeHtml(name)}" aria-pressed="${selected.colors.has(name)}"><span class="color-dot" style="background:${COLOR_HEX[name] ?? '#C9A9A9'}"></span>${escapeHtml(name)}</button>`).join('')}
           </div>
         </div>
         <div class="field">
@@ -76,12 +84,8 @@ export function renderItemEdit({ id = 'new' } = {}) {
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="item-brand">品牌</label>
-          <input class="text-input" id="item-brand" name="brand" maxlength="40" value="${escapeHtml(existing?.brand ?? '')}">
-        </div>
-        <div class="field">
           <label class="field-label" for="item-note">备注</label>
-          <textarea class="text-area" id="item-note" name="note" maxlength="500">${escapeHtml(existing?.note ?? '')}</textarea>
+          <textarea class="text-area" id="item-note" maxlength="500">${escapeHtml(existing?.note ?? '')}</textarea>
         </div>
         <div class="field">
           <div class="field-label">收藏</div>
@@ -104,10 +108,14 @@ export function renderItemEdit({ id = 'new' } = {}) {
   });
   document.getElementById('photo-slot').append(photoInput.element);
 
-  document.getElementById('back-button').addEventListener('click', () => {
+  const back = () => {
     photoInput.clear();
     if (history.length > 1) history.back();
     else navigate('/wardrobe');
+  };
+  document.getElementById('back-button').addEventListener('click', back);
+  document.getElementById('header-save').addEventListener('click', () => {
+    document.getElementById('item-form').requestSubmit();
   });
   document.getElementById('favorite-toggle').addEventListener('click', event => {
     selected.favorite = !selected.favorite;
@@ -116,32 +124,30 @@ export function renderItemEdit({ id = 'new' } = {}) {
   document.getElementById('category-choices').addEventListener('click', event => {
     const button = event.target.closest('[data-category]');
     if (!button) return;
-    selectedCategory = button.dataset.category;
-    for (const chip of event.currentTarget.querySelectorAll('.choice-chip')) {
-      chip.setAttribute('aria-pressed', String(chip === button));
-    }
+    const value = button.dataset.category;
+    selected.categories.has(value) ? selected.categories.delete(value) : selected.categories.add(value);
+    button.setAttribute('aria-pressed', String(selected.categories.has(value)));
   });
   document.getElementById('color-choices').addEventListener('click', event => {
     const button = event.target.closest('[data-color]');
     if (!button) return;
-    selectedColor = button.dataset.color;
-    for (const chip of event.currentTarget.querySelectorAll('.choice-chip')) {
-      chip.setAttribute('aria-pressed', String(chip === button));
-    }
+    const value = button.dataset.color;
+    selected.colors.has(value) ? selected.colors.delete(value) : selected.colors.add(value);
+    button.setAttribute('aria-pressed', String(selected.colors.has(value)));
   });
   document.getElementById('season-choices').addEventListener('click', event => {
     const button = event.target.closest('[data-season]');
     if (!button) return;
-    const key = button.dataset.season;
-    selected.seasons.has(key) ? selected.seasons.delete(key) : selected.seasons.add(key);
-    button.setAttribute('aria-pressed', String(selected.seasons.has(key)));
+    const value = button.dataset.season;
+    selected.seasons.has(value) ? selected.seasons.delete(value) : selected.seasons.add(value);
+    button.setAttribute('aria-pressed', String(selected.seasons.has(value)));
   });
   document.getElementById('occasion-choices').addEventListener('click', event => {
     const button = event.target.closest('[data-occasion]');
     if (!button) return;
-    const key = button.dataset.occasion;
-    selected.occasions.has(key) ? selected.occasions.delete(key) : selected.occasions.add(key);
-    button.setAttribute('aria-pressed', String(selected.occasions.has(key)));
+    const value = button.dataset.occasion;
+    selected.occasions.has(value) ? selected.occasions.delete(value) : selected.occasions.add(value);
+    button.setAttribute('aria-pressed', String(selected.occasions.has(value)));
   });
 
   document.getElementById('item-form').addEventListener('submit', async event => {
@@ -149,17 +155,17 @@ export function renderItemEdit({ id = 'new' } = {}) {
     const form = {
       id: existing?.id,
       name: document.getElementById('item-name').value,
-      category: selectedCategory,
-      color: selectedColor,
+      brand: document.getElementById('item-brand').value,
+      categories: [...selected.categories],
+      colors: [...selected.colors],
       seasons: [...selected.seasons],
       occasions: [...selected.occasions],
-      brand: document.getElementById('item-brand').value,
       note: document.getElementById('item-note').value,
       favorite: selected.favorite,
     };
     const errors = validateItem(form);
     document.getElementById('error-name').textContent = errors.name ?? '';
-    document.getElementById('error-category').textContent = errors.category ?? '';
+    document.getElementById('error-categories').textContent = errors.categories ?? '';
     if (hasErrors(errors)) return;
     const saveButton = document.getElementById('save-button');
     saveButton.disabled = true;
@@ -210,5 +216,8 @@ export function renderItemEdit({ id = 'new' } = {}) {
     navigate('/wardrobe');
   });
 
-  return () => photoInput.clear();
+  return () => {
+    photoInput.clear();
+    document.body.classList.remove('detail-mode');
+  };
 }

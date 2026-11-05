@@ -12,8 +12,8 @@ const state = {
   logs: [],
   settings: { categories: [], colors: [], lastBackupAt: null },
   photoUrls: new Map(),
-  filters: { keyword: '', category: '', seasons: [], occasions: [], favoriteOnly: false },
-  sort: 'recent',
+  filters: { keyword: '', category: '', categories: [], colors: [], seasons: [], occasions: [], favoriteOnly: false },
+  sort: 'custom',
 };
 
 const listeners = new Set();

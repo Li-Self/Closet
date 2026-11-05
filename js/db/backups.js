@@ -3,7 +3,7 @@ import { blobToDataUrl, dataUrlToBlob } from '../utils/image.js';
 import { saveSetting } from './settings.js';
 
 export const BACKUP_APP = 'wardrobe-pwa';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 export function validateBackup(payload) {
   const errors = [];
@@ -27,6 +27,13 @@ export function validateBackup(payload) {
       errors.push('存在无效的单品数据');
       break;
     }
+    const categories = Array.isArray(item.categories)
+      ? item.categories.filter(Boolean)
+      : (typeof item.category === 'string' && item.category.trim() ? [item.category] : []);
+    if (!categories.length) {
+      errors.push('存在缺少分类的单品数据');
+      break;
+    }
   }
   for (const outfit of data.outfits) {
     if (!outfit?.id || typeof outfit.name !== 'string' || !outfit.name.trim() || !Array.isArray(outfit.itemIds)) {
@@ -48,6 +55,34 @@ export function validateBackup(payload) {
     }
   }
   return { ok: errors.length === 0, errors };
+}
+
+export function normalizeBackup(payload) {
+  const data = payload.data;
+  const items = data.items.map((item, index) => {
+    const { category, color, ...rest } = item;
+    const categories = Array.isArray(item.categories)
+      ? [...new Set(item.categories.filter(Boolean))]
+      : (item.category ? [item.category] : []);
+    const colors = Array.isArray(item.colors)
+      ? [...new Set(item.colors.filter(Boolean))]
+      : (item.color ? [item.color] : []);
+    const sortOrder = Number.isFinite(item.sortOrder)
+      ? item.sortOrder
+      : (Number.isFinite(item.code) ? item.code : index);
+    return { ...rest, categories, colors, sortOrder };
+  });
+  const outfits = data.outfits.map((outfit, index) => ({
+    ...outfit,
+    sortOrder: Number.isFinite(outfit.sortOrder)
+      ? outfit.sortOrder
+      : (Number.isFinite(outfit.code) ? outfit.code : index),
+  }));
+  return {
+    ...payload,
+    schemaVersion: BACKUP_VERSION,
+    data: { ...data, items, outfits },
+  };
 }
 
 export async function buildBackup() {
@@ -97,11 +132,12 @@ export async function readBackupFile(file) {
   }
   const result = validateBackup(payload);
   if (!result.ok) throw new Error(result.errors.join('；'));
-  return payload;
+  return normalizeBackup(payload);
 }
 
 export async function applyBackup(payload) {
-  const photos = payload.data.photos.map(photo => ({
+  const normalized = normalizeBackup(payload);
+  const photos = normalized.data.photos.map(photo => ({
     ...photo,
     thumb: dataUrlToBlob(photo.thumb),
     full: dataUrlToBlob(photo.full),
@@ -110,13 +146,13 @@ export async function applyBackup(payload) {
     for (const name of ['items', 'photos', 'outfits', 'wearLogs', 'settings']) {
       tx.objectStore(name).clear();
     }
-    for (const value of payload.data.items) tx.objectStore('items').put(value);
+    for (const value of normalized.data.items) tx.objectStore('items').put(value);
     for (const value of photos) tx.objectStore('photos').put(value);
-    for (const value of payload.data.outfits) tx.objectStore('outfits').put(value);
-    for (const value of payload.data.wearLogs) tx.objectStore('wearLogs').put(value);
-    for (const value of payload.data.settings) tx.objectStore('settings').put(value);
+    for (const value of normalized.data.outfits) tx.objectStore('outfits').put(value);
+    for (const value of normalized.data.wearLogs) tx.objectStore('wearLogs').put(value);
+    for (const value of normalized.data.settings) tx.objectStore('settings').put(value);
   });
-  return payload;
+  return normalized;
 }
 
 export async function importBackupFile(file) {

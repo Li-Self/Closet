@@ -53,9 +53,9 @@ function encodePng(size, pixels) {
 
 function drawIcon(size, paddingRatio = 0) {
   const pixels = Buffer.alloc(size * size * 4);
-  const paper = [245, 230, 200];
-  const rust = [139, 94, 60];
-  const cream = [255, 253, 246];
+  const paper = [253, 242, 244];
+  const rust = [226, 109, 135];
+  const cream = [255, 253, 249];
   const set = (x, y, color) => {
     if (x < 0 || y < 0 || x >= size || y >= size) return;
     const i = (y * size + x) * 4;

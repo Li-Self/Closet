@@ -4,13 +4,20 @@ export const SEASON_LABELS = { spring: '春', summer: '夏', autumn: '秋', wint
 export const OCCASION_LABELS = { daily: '日常', work: '通勤', date: '约会', sport: '运动', formal: '正式', home: '居家' };
 
 const trim = value => (typeof value === 'string' ? value.trim() : '');
+const cleanList = value => Array.isArray(value)
+  ? value.map(item => trim(item)).filter(Boolean)
+  : [];
 
 export function validateItem(input) {
   const errors = {};
   const name = trim(input.name);
   if (!name) errors.name = '请填写单品名称';
   else if (name.length > 60) errors.name = '名称不能超过 60 字';
-  if (!input.category) errors.category = '请选择分类';
+  const categories = cleanList(input.categories ?? (input.category ? [input.category] : []));
+  if (!categories.length) errors.categories = '请至少选择一个分类';
+  else if (categories.some(value => value.length > 20)) errors.categories = '分类名称不能超过 20 字';
+  const colors = cleanList(input.colors ?? (input.color ? [input.color] : []));
+  if (colors.some(value => value.length > 20)) errors.colors = '颜色名称不能超过 20 字';
   if (trim(input.brand).length > 40) errors.brand = '品牌不能超过 40 字';
   if (trim(input.note).length > 500) errors.note = '备注不能超过 500 字';
   return errors;

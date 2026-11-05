@@ -1,4 +1,4 @@
-const CACHE = 'wardrobe-v5';
+const CACHE = 'wardrobe-v7';
 const CORE = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const CORE = [
   './js/components/log-sheet.js',
   './js/components/photo-input.js',
   './js/components/empty-state.js',
+  './js/components/camera.js',
   './js/utils/dates.js',
   './js/utils/stats.js',
   './js/utils/filters.js',
@@ -35,6 +36,7 @@ const CORE = [
   './js/utils/image.js',
   './js/utils/id.js',
   './js/utils/dom.js',
+  './js/utils/sortable.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

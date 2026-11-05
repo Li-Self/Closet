@@ -4,9 +4,23 @@ import { validateItem, hasErrors } from '../utils/validation.js';
 
 const nowISO = () => new Date().toISOString();
 
+export function normalizeCategories(input) {
+  const raw = Array.isArray(input.categories)
+    ? input.categories
+    : (input.category ? [input.category] : []);
+  return [...new Set(raw.map(value => String(value).trim()).filter(Boolean))];
+}
+
+export function normalizeColors(input) {
+  const raw = Array.isArray(input.colors)
+    ? input.colors
+    : (input.color ? [input.color] : []);
+  return [...new Set(raw.map(value => String(value).trim()).filter(Boolean))];
+}
+
 export async function listItems() {
   const items = await getAll('items');
-  return items.sort((a, b) => (b.code ?? 0) - (a.code ?? 0));
+  return items.sort((a, b) => (a.sortOrder ?? a.code ?? 0) - (b.sortOrder ?? b.code ?? 0));
 }
 
 export async function getItem(id) {
@@ -14,7 +28,9 @@ export async function getItem(id) {
 }
 
 export async function saveItem(input) {
-  const errors = validateItem(input);
+  const categories = normalizeCategories(input);
+  const colors = normalizeColors(input);
+  const errors = validateItem({ ...input, categories, colors });
   if (hasErrors(errors)) {
     const error = new Error('表单校验失败');
     error.errors = errors;
@@ -22,17 +38,22 @@ export async function saveItem(input) {
   }
   const now = nowISO();
   const existing = input.id ? await getItem(input.id) : null;
+  const all = await getAll('items');
   let code = existing?.code;
   if (!code) {
-    const all = await getAll('items');
     code = all.reduce((max, item) => Math.max(max, item.code ?? 0), 0) + 1;
+  }
+  let sortOrder = existing?.sortOrder;
+  if (!Number.isFinite(sortOrder)) {
+    sortOrder = all.reduce((max, item) => Math.max(max, item.sortOrder ?? 0), 0) + 1;
   }
   const item = {
     id: existing?.id ?? uuid(),
     code,
+    sortOrder,
     name: input.name.trim(),
-    category: input.category,
-    color: input.color ?? '',
+    categories,
+    colors,
     seasons: [...(input.seasons ?? [])],
     occasions: [...(input.occasions ?? [])],
     brand: (input.brand ?? '').trim(),
@@ -44,6 +65,19 @@ export async function saveItem(input) {
   };
   await putOne('items', item);
   return item;
+}
+
+export async function reorderItems(orderedIds) {
+  await runTransaction(['items'], 'readwrite', async tx => {
+    const store = tx.objectStore('items');
+    for (let index = 0; index < orderedIds.length; index += 1) {
+      const item = await requestPromise(store.get(orderedIds[index]));
+      if (!item) continue;
+      item.sortOrder = index;
+      item.updatedAt = nowISO();
+      store.put(item);
+    }
+  });
 }
 
 export async function deleteItem(id) {

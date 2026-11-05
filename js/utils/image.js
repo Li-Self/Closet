@@ -1,3 +1,10 @@
+export const PHOTO_LIMITS = {
+  fullMaxEdge: 2400,
+  fullQuality: 0.9,
+  thumbMaxEdge: 600,
+  thumbQuality: 0.82,
+};
+
 export function computeTargetSize(width, height, maxEdge) {
   if (!width || !height) return { width: 0, height: 0 };
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -36,11 +43,11 @@ export async function compressPhoto(file) {
   const source = await decodeImage(file);
   const width = source.width;
   const height = source.height;
-  const fullSize = computeTargetSize(width, height, 1200);
-  const thumbSize = computeTargetSize(width, height, 400);
+  const fullSize = computeTargetSize(width, height, PHOTO_LIMITS.fullMaxEdge);
+  const thumbSize = computeTargetSize(width, height, PHOTO_LIMITS.thumbMaxEdge);
   const [full, thumb] = await Promise.all([
-    drawToBlob(source, fullSize.width, fullSize.height, 0.82),
-    drawToBlob(source, thumbSize.width, thumbSize.height, 0.75),
+    drawToBlob(source, fullSize.width, fullSize.height, PHOTO_LIMITS.fullQuality),
+    drawToBlob(source, thumbSize.width, thumbSize.height, PHOTO_LIMITS.thumbQuality),
   ]);
   source.close?.();
   return { thumb, full, width, height };

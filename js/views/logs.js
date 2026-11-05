@@ -28,7 +28,7 @@ function paint() {
   const idle = countIdle(state.items, state.logs, nowKey());
   const selectedLog = logByDate(selectedDate);
   app.innerHTML = `
-    <div class="page">
+    <div class="page logs-page">
       <header class="page-header">
         <div>
           <div class="page-subtitle">Wear Diary</div>
