@@ -1,0 +1,11 @@
+{
+  "name": "my-wardrobe-pwa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "node scripts/dev-server.mjs",
+    "icons": "node scripts/generate-icons.mjs"
+  }
+}
